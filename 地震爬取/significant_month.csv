@@ -1,0 +1,11 @@
+time,latitude,longitude,depth,mag,magType,nst,gap,dmin,rms,net,id,updated,place,type,horizontalError,depthError,magError,magNst,status,locationSource,magSource
+2019-08-29T15:07:58.310Z,43.5674,-127.8647,5.41,6.3,mww,,88,2.672,1.26,us,us700059qh,2019-08-30T09:36:17.401Z,"284km WNW of Bandon, Oregon",earthquake,6.9,3.5,0.04,60,reviewed,us,us
+2019-08-27T23:55:20.479Z,-60.2088,-26.5327,24.5,6.6,mww,,19,14.67,0.9,us,us700058yy,2019-08-29T19:03:36.040Z,"130km S of Bristol Island, South Sandwich Islands",earthquake,9.4,3.1,0.045,48,reviewed,us,us
+2019-08-22T20:49:50.060Z,35.9073333,-117.709,2.4,5.01,mw,72,20,0.06247,0.21,ci,ci38996632,2019-08-28T17:24:13.040Z,"18km E of Little Lake, CA",earthquake,0.12,0.28,,6,reviewed,ci,ci
+2019-08-18T08:45:29.680Z,38.0146,-98.005,5,4.1,mwr,,186,0.689,0.43,us,us600056mz,2019-08-22T03:12:37.159Z,"5km WSW of South Hutchinson, Kansas",earthquake,2.6,2,0.042,55,reviewed,us,us
+2019-08-16T12:59:10.388Z,38.0101,-97.9879,5,4.2,mwr,,186,0.702,0.29,us,us600055xa,2019-08-22T14:55:38.406Z,"4km WSW of South Hutchinson, Kansas",earthquake,1.5,1.9,0.037,71,reviewed,us,us
+2019-08-07T21:28:03.613Z,24.4808,121.9326,20.34,5.8,mww,,17,0.434,0.82,us,us6000522g,2019-08-23T22:30:42.189Z,"15km SSE of Su'ao, Taiwan",earthquake,5.2,2.3,0.056,31,reviewed,us,us
+2019-08-04T10:23:03.736Z,37.7597,141.6089,38,6.3,mww,,32,0.657,0.8,us,us600050if,2019-08-26T18:05:06.675Z,"61km ENE of Namie, Japan",earthquake,7.2,1.9,0.071,19,reviewed,us,us
+2019-08-02T12:03:27.483Z,-7.2668,104.8245,52.76,6.9,mww,,41,3.434,0.83,us,us60004zhq,2019-08-10T05:29:10.454Z,"102km WSW of Tugu Hilir, Indonesia",earthquake,7.2,4.3,0.043,51,reviewed,us,us
+2019-08-01T18:28:07.272Z,-34.2367,-72.3079,25,6.8,mww,,35,0.816,0.91,us,us60004yps,2019-08-19T19:29:18.526Z,"95km SW of San Antonio, Chile",earthquake,2.8,1.8,0.045,48,reviewed,us,us
+2019-07-31T15:02:33.853Z,-16.1985,167.9982,181,6.6,mww,,30,6.024,0.99,us,us60004xz4,2019-08-20T23:11:32.445Z,"62km E of Lakatoro, Vanuatu",earthquake,7.6,1.8,0.038,65,reviewed,us,us
