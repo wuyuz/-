@@ -1,4 +1,4 @@
-## Scrapy 运用与总结
+##  Scrapy 运用与总结
 
 
 
@@ -1590,5 +1590,317 @@ Windows：
 
   - 爬取阳光热线：爬取所有页码对应的页面标题
 
+    ```python
+    爬虫文件
+    import scrapy
+    from scrapy.linkextractors import LinkExtractor
+    from scrapy.spiders import CrawlSpider, Rule
+    from scrapy_redis.spiders import RedisCrawlSpider
+    from fbsPro.items import FbsproItem
+    
+    #继承redis的爬虫类
+    class FbsSpider(RedisCrawlSpider):
+        name = 'fbs'
+        # allowed_domains = ['www.xxx.com']
+    
+        # start_urls = ['http://www.xxx.com/']
+        #不需要start_urls,替换为redis_key,
+        #表示的是可被共享调度器中的队列的名称，是用来存储经过调度器中过滤器过滤去重后的数据对象
+        redis_key = 'fbsQueue'
+    
+        rules = (
+            #爬取页码url
+            Rule(LinkExtractor(allow=r'type=4&page=\d+'), callback='parse_item', follow=True),
+        )
+    
+        def parse_item(self, response):
+            tr_list = response.xpath('//*[@id="morelist"]/div/table[2]//tr/td/table//tr')
+            for tr in tr_list:
+                title = tr.xpath('./td[2]/a[2]/@title').extract_first()
+                status = tr.xpath('./td[3]/span/text()').extract_first()
+                item = FbsproItem()
+                item['title'] = title
+                item['status'] = status
+                yield item
+    
+    ----------------------------------------------------------------------
+     #items.py文件，根本用户到pipe
+    import scrapy
+    class FbsproItem(scrapy.Item):
+         title = scrapy.Field()
+         status = scrapy.Field()
+    --------------------------------------------------------------------
+     #pipelines.py文件
+    class FbsproPipeline(object):
+        def process_item(self, item, spider):
+            return item
+    --------------------------------------------------------------------
+     #settings.py文件
+    ROBOTSTXT_OBEY = False
+    #开启可以被共享的管道,意味着item提交给它
+    ITEM_PIPELINES = {
+        'scrapy_redis.pipelines.RedisPipeline': 400
+    }
+    
+    #指定使用可被共享的调度器
+    # 增加了一个去重容器类的配置, 作用使用Redis的set集合来存储请求的指纹数据, 从而实现请求去重的持久化
+    DUPEFILTER_CLASS = "scrapy_redis.dupefilter.RFPDupeFilter"  #去重
+    
+    # 使用scrapy-redis组件自己的调度器
+    SCHEDULER = "scrapy_redis.scheduler.Scheduler"
+    
+    # 配置调度器是否要持久化, 也就是当爬虫结束了, 要不要清空Redis中请求队列和去重指纹的set。如果是True, 就表示要持久化存储, 就不清空数据, 否则清空数据
+    SCHEDULER_PERSIST = True
+    
+    #指定redis，局域网可以访问
+    REDIS_HOST = '192.168.11.175'
+    REDIS_PORT = 6379
+    ```
+
+    
+
+#### Scrapy中间件详解
+
+​	中间件是Scrapy里面的一个核心概念。使用中间件可以在爬虫的请求发起之前或者请求返回之后对数据进行定制化修改，从而开发出适应不同情况的爬虫。“中间件”这个中文名字和前面章节讲到的“中间人”只有一字之差。它们做的事情确实也非常相似。中间件和中间人都能在中途劫持数据，做一些修改再把数据传递出去。不同点在于，中间件是开发者主动加进去的组件，而中间人是被动的，一般是恶意地加进去的环节。中间件主要用来辅助开发，而中间人却多被用来进行数据的窃取、伪造甚至攻击。
+
+**在Scrapy中有两种中间件**：下载器中间件（Downloader Middleware）和爬虫中间件（Spider Middleware）。
 
 
+
+下载中间件： 官方解读，下载器中间件是介于Scrapy的request/response处理的钩子框架，是用于全局修改Scrapy request和response的一个轻量、底层的系统。这个介绍看起来非常绕口，但其实用容易理解的话表述就是：更换代理IP，更换Cookies，更换User-Agent，自动重试。
+
+![1567575692768](C:\Users\wanglixing\Desktop\知识点复习\爬虫笔记\assets\1567575692768.png)
+
+
+
+- 自定义代理中间件： 
+
+  Scrapy自动生成的这个文件名称为middlewares.py，名字后面的s表示复数，说明这个文件里面可以放很多个中间件。Scrapy自动创建的这个中间件是一个爬虫中间件，除了自带的中间件，我们可以自定义中间件，比如：开发代理中间件
+
+  ```python
+   #在middlewares.py中添加下面一段代码
+  class ProxyMiddleware(object):
+      #每个请求进来都要经过此函数，前提是注册了此类
+      def process_request(self, request, spider):
+          proxy = random.choice(settings['PROXIES'])
+          request.meta['proxy'] = proxy
+  ```
+
+  要修改请求的代理，就需要在请求的meta里面添加一个Key为proxy，Value为代理IP的项。
+
+  由于用到了random和settings，所以需要在middlewares.py开头导入它们：
+
+  ```python
+  import random
+  from scrapy.conf import settings  #配置了settings文件
+  ```
+
+  在下载器中间件里面有一个名为`process_request()`的方法，这个方法中的代码会在每次爬虫访问网页之前执行。打开settings.py，首先添加几个代理IP：
+
+  ```PYTHON
+  PROXIES = ['https://114.217.243.25:8118',
+            'https://125.37.175.233:8118',
+            'http://1.85.116.218:8118']
+            
+            #需要注意的是，代理IP是有类型的，需要先看清楚是HTTP型的代理IP还是HTTPS型的代理IP。如果用错了，就会导致无法访问。
+          
+   #解除注释并修改，从而引用ProxyMiddleware。修改为：
+  DOWNLOADER_MIDDLEWARES = {
+    'AdvanceSpider.middlewares.ProxyMiddleware': 543,
+  }
+  ```
+
+  ​	不为人知的scrapy自带的中间件：Scrapy其实自带了UA中间件（UserAgentMiddleware）、代理中间件（HttpProxyMiddleware）和重试中间件（RetryMiddleware）。所以，从“原则上”说，要自己开发这3个中间件，需要先禁用Scrapy里面自带的这3个中间件。要禁用Scrapy的中间件，需要在settings.py里面将这个中间件的顺序设为None：
+
+  ```python
+  DOWNLOADER_MIDDLEWARES = {
+    'AdvanceSpider.middlewares.ProxyMiddleware': 543,
+    'scrapy.contrib.downloadermiddleware.useragent.UserAgentMiddleware': None,
+    'scrapy.contrib.downloadermiddleware.httpproxy.HttpProxyMiddleware': None
+  }
+  ```
+
+- 自定义UA中间件：
+
+  开发UA中间件和开发代理中间件几乎一样，它也是从settings.py配置好的UA列表中随机选择一项，加入到请求头中。代码如下：
+
+  ```python
+  class UAMiddleware(object):
+      def process_request(self, request, spider):
+          ua = random.choice(settings['USER_AGENT_LIST']) #在settting中配置
+          request.headers['User-Agent'] = ua
+  ```
+
+  比IP更好的是，UA不会存在失效的问题，所以只要收集几十个UA，就可以一直使用
+
+- 自定义Cookie中间件：
+
+  首先开发一个小程序，通过Selenium登录这个页面，并将网站返回的Headers保存到Redis中。这个小程序的代码如下图所示。
+
+  ```python
+  import time
+  import json
+  import redis
+  from selenium import webdriver
+  
+  # 获取redis连接对象
+  client = redis.StrictRedis()
+  
+  driver = webdriver.Chrome(executable_path=r'D:\21期\爬虫 + 数据分析\tools\chromedriver.exe')
+  driver.get('http://exercise.kingname.info/exercise_login_success')
+  
+  user = driver.find_element_by_xpath('//input[@name="username"]')
+  user.clear()
+  user.send_keys('kingname')
+  
+  user = driver.find_element_by_xpath('//input[@name="password"]')
+  user.clear()
+  user.send_keys('genius')
+  
+  rember = driver.find_element_by_xpath('//input[@name="rememberme"]')
+  rember.click()
+  
+  login = driver.find_element_by_xpath('//button[@class="login"]')
+  login.click()
+  
+  time.sleep(2)
+  cookies = driver.get_cookies()
+  client.lpush('cookies',json.dumps(cookies))
+  driver.quit()
+  ```
+
+  ​      这段代码的作用是使用Selenium和ChromeDriver填写用户名和密码，实现登录练习页面，然后将登录以后的Cookies转换为JSON格式的字符串并保存到Redis中。
+
+  接下来，再写一个中间件，用来从Redis中读取Cookies，并把这个Cookies给Scrapy使用，并且在settings.py文件中修改中间件配置文件
+
+  ```python
+  from scrapy import signals
+  import redis,json
+  
+  class LoginMiddleware(object):
+      # 每次请求chong
+      def __init__(self):
+          self.client = redis.StrictRedis()
+  
+      def process_request(self,request,spider):
+          # 过滤爬虫文件名
+          if spider.name == 'spider':
+              #获得redis中的数据，第二次得重新运行selenium文件将cookie存入才可用
+              cookies = json.loads(self.client.lpop('cookies').decode())
+              print(cookies)
+              request.cookies = cookies
+  ```
+
+  设置了这个中间件以后，爬虫里面的代码不需要做任何修改就可以成功得到登录以后才能看到的HTML
+
+- 中间件中集成Selenium：
+
+  ​     对于一些很麻烦的异步加载页面，手动寻找它的后台API代价可能太大。这种情况下可以使用Selenium和ChromeDriver或者Selenium和PhantomJS来实现渲染网页。
+
+  这是前面的章节已经讲到的内容。那么，如何把Scrapy与Selenium结合起来呢？这个时候又要用到中间件了。
+
+  创建一个SeleniumMiddleware，其代码如下：
+
+  ```python
+  from scrapy.http import HtmlResponse
+  class SeleniumMiddleware(object):
+      def __init__(self):
+          self.driver = webdriver.Chrome('./chromedriver')
+  
+      def process_request(self, request, spider):
+          if spider.name == 'seleniumSpider':
+              self.driver.get(request.url)
+              time.sleep(2)
+              body = self.driver.page_source
+          return HtmlResponse(self.driver.current_url,
+                             body=body,
+                             encoding='utf-8',
+                             request=request)
+  ```
+
+  这个中间件的作用，就是对名为“seleniumSpider”的爬虫请求的网址，使用ChromeDriver先进行渲染，然后用返回的渲染后的HTML代码构造一个Response对象
+
+
+
+
+
+#### 增量式爬虫
+
+​	当我们在浏览相关网页的时候会发现，某些网站定时会在原有网页数据的基础上更新一批数据，例如某电影网站会实时更新一批最近热门的电影。小说网站会根据作者创作的进度实时更新最新的章节数据等等。那么，类似的情景，当我们在爬虫的过程中遇到时，我们是不是需要定时更新程序以便能爬取到网站中最近更新的数据呢？
+
+- 概念：通过爬虫程序监测某网站数据更新的情况，以便可以爬取到该网站更新出的新数据。
+
+- 如何进行增量式的爬取工作：
+
+  - 在发送请求之前判断这个URL是不是之前爬取过
+
+  - 在解析内容后判断这部分内容是不是之前爬取过
+
+  - 写入存储介质时判断内容是不是已经在介质中存在
+
+    分析：不难发现，其实增量爬取的核心是**去重**， 至于去重的操作在哪个步骤起作用，只能说各有利弊。在我看来，前两种思路需要根据实际情况取一个（也可能都用）。第一种思路适合不断有新页面出现的网站，比如说小说的新章节，每天的最新新闻等等；第二种思路则适合页面内容会更新的网站。第三个思路是相当于是最后的一道防线。这样做可以最大程度上达到去重的目的。
+
+- 去重方法
+
+  - 将爬取过程中产生的url进行存储，存储在redis的set中。当下次进行数据爬取时，首先对即将要发起的请求对应的url在存储的url的set中做判断，如果存在则不进行请求，否则才进行请求。
+  - 对爬取到的网页内容进行唯一标识的制定，然后将该唯一表示存储至redis的set中。当下次爬取到网页数据的时候，在进行持久化存储之前，首先可以先判断该数据的唯一标识在redis的set中是否存在，在决定是否进行持久化存储。
+
+- 简单示例：
+
+  ```python
+  爬虫文件：
+  import scrapy
+  from scrapy.linkextractors import LinkExtractor
+  from scrapy.spiders import CrawlSpider, Rule
+  
+  from redis import Redis
+  from incrementPro.items import IncrementproItem
+  class MovieSpider(CrawlSpider):
+      name = 'movie'
+      # allowed_domains = ['www.xxx.com']
+      start_urls = ['http://www.4567tv.tv/frim/index7-11.html']
+  
+      rules = (
+          Rule(LinkExtractor(allow=r'/frim/index7-\d+\.html'), callback='parse_item', follow=True),
+      )
+      #创建redis链接对象
+      conn = Redis(host='127.0.0.1',port=6379)
+      def parse_item(self, response):
+          li_list = response.xpath('//li[@class="p1 m1"]')
+          for li in li_list:
+              #获取详情页的url
+              detail_url = 'http://www.4567tv.tv'+li.xpath('./a/@href').extract_first()
+              #将详情页的url存入redis的set中，通过redis的set进行去重判断
+              ex = self.conn.sadd('urls',detail_url)
+              if ex == 1:
+                  print('该url没有被爬取过，可以进行数据的爬取')
+                  yield scrapy.Request(url=detail_url,callback=self.parst_detail)
+              else:
+                  print('数据还没有更新，暂无新数据可爬取！')
+  
+      #解析详情页中的电影名称和类型，进行持久化存储
+      def parst_detail(self,response):
+          item = IncrementproItem()
+          item['name'] = response.xpath('//dt[@class="name"]/text()').extract_first()
+          item['kind'] = response.xpath('//div[@class="ct-c"]/dl/dt[4]//text()').extract()
+          item['kind'] = ''.join(item['kind'])
+          yield item
+          
+  -------------------------------------------------------------------        
+   #管道文件：
+  from redis import Redis
+  class IncrementproPipeline(object):
+      conn = None
+      def open_spider(self,spider):
+          self.conn = Redis(host='127.0.0.1',port=6379)
+      def process_item(self, item, spider):
+          dic = {
+              'name':item['name'],
+              'kind':item['kind']
+          }
+          print(dic)
+          self.conn.lpush('movieData',dic)
+          return item
+  ```
+
+  
