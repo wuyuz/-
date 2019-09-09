@@ -336,8 +336,6 @@ def param_param():
 
 def param_data():
     
-    
-    
     # 可以是文件对象
 	# 可以是字典
     requests.request(method='POST',
